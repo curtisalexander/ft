@@ -1,5 +1,7 @@
 # ft — Fine-Tuning, explained with a worked example
 
+📖 **Read the guide live:** <https://curtisalexander.github.io/ft/>
+
 A small, self-contained learning project about **fine-tuning a language model**.
 
 - **`index.html`** — a from-scratch guide: what fine-tuning is, when you *can* and
