@@ -1,6 +1,6 @@
 # ft — Fine-Tuning, explained with a worked example
 
-📖 **Read the guide live:** <https://curtisalexander.github.io/ft/>
+📖 **Read the guide:** open [`index.html`](index.html) in a browser, or serve it locally (see [Viewing the guide](#viewing-the-guide)).
 
 A small, self-contained learning project about **fine-tuning a language model**.
 
@@ -47,12 +47,16 @@ environment on first use, and caches it.
 | `uv run train` | `train.py` | Tokenizes, aligns labels to sub-words, adds a classification head to DistilBERT, fine-tunes, and reports precision/recall/F1 on the held-out test split. |
 | `uv run predict "..."` | `predict.py` | Loads `./phone-ner-model` and extracts (and normalizes) phone numbers from any note. With no argument, runs built-in demo notes. |
 
-## Publishing the guide on GitHub Pages
+## Viewing the guide
 
-1. Create a GitHub repo named **`ft`** and push this folder.
-2. In the repo: **Settings → Pages → Build and deployment → Source: Deploy from a branch**,
-   pick your default branch and `/ (root)`.
-3. `index.html` is served at `https://<you>.github.io/ft/`.
+`index.html` is fully self-contained (no external assets), so you can view it two ways:
+
+- **Open the file directly** — double-click `index.html`, or open `file://` to it in your browser.
+- **Serve it locally:**
+
+  ```bash
+  python3 -m http.server 8000      # then open http://localhost:8000/
+  ```
 
 ## Notes
 
