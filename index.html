@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Fine-Tuning a Language Model — A Practical Guide</title>
+<meta name="description" content="What fine-tuning is, when you can and can't do it, how to get data, and a full worked example: fine-tuning a small model to extract phone numbers from customer-service notes." />
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #171a21;
+    --panel-2: #1d212b;
+    --ink: #e6e8ec;
+    --muted: #9aa3b2;
+    --accent: #6ea8fe;
+    --accent-2: #7ee0a8;
+    --warn: #ffcc66;
+    --danger: #ff7b72;
+    --border: #2a2f3a;
+    --code-bg: #0b0d11;
+    --maxw: 860px;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font: 16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  header.hero {
+    padding: 64px 24px 40px;
+    text-align: center;
+    background: radial-gradient(1200px 400px at 50% -10%, #1b2540 0%, var(--bg) 60%);
+    border-bottom: 1px solid var(--border);
+  }
+  header.hero h1 { font-size: 2.2rem; margin: 0 0 10px; letter-spacing: -0.02em; }
+  header.hero p { color: var(--muted); max-width: 620px; margin: 0 auto; font-size: 1.05rem; }
+  .badges { margin-top: 18px; display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+  .badge { font-size: 0.78rem; color: var(--muted); border: 1px solid var(--border); border-radius: 999px; padding: 4px 12px; background: var(--panel); }
+  main { max-width: var(--maxw); margin: 0 auto; padding: 0 24px 96px; }
+  nav.toc {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 18px 22px;
+    margin: 36px 0;
+  }
+  nav.toc strong { display: block; margin-bottom: 8px; font-size: 0.9rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+  nav.toc ol { margin: 0; padding-left: 20px; columns: 2; column-gap: 28px; }
+  nav.toc a { color: var(--accent); text-decoration: none; }
+  nav.toc a:hover { text-decoration: underline; }
+  h2 { font-size: 1.55rem; margin: 52px 0 14px; padding-top: 12px; letter-spacing: -0.01em; border-top: 1px solid var(--border); }
+  h2:first-of-type { border-top: none; }
+  h3 { font-size: 1.15rem; margin: 30px 0 10px; color: #cdd3dd; }
+  p, li { color: var(--ink); }
+  a { color: var(--accent); }
+  code { font-family: "SF Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.9em; background: var(--panel-2); padding: 1px 6px; border-radius: 5px; color: #e7ecff; }
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 18px;
+    overflow-x: auto;
+    font-family: "SF Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.86rem;
+    line-height: 1.55;
+  }
+  pre code { background: none; padding: 0; color: #d7dce6; }
+  .callout { border: 1px solid var(--border); border-left-width: 4px; border-radius: 8px; padding: 14px 18px; margin: 20px 0; background: var(--panel); }
+  .callout.tip { border-left-color: var(--accent-2); }
+  .callout.warn { border-left-color: var(--warn); }
+  .callout.stop { border-left-color: var(--danger); }
+  .callout .label { font-weight: 700; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.06em; display: block; margin-bottom: 4px; }
+  .callout.tip .label { color: var(--accent-2); }
+  .callout.warn .label { color: var(--warn); }
+  .callout.stop .label { color: var(--danger); }
+  table { width: 100%; border-collapse: collapse; margin: 18px 0; font-size: 0.92rem; }
+  th, td { text-align: left; padding: 10px 12px; border: 1px solid var(--border); vertical-align: top; }
+  th { background: var(--panel-2); color: #cdd3dd; }
+  td code { white-space: nowrap; }
+  .yes { color: var(--accent-2); font-weight: 700; }
+  .no { color: var(--danger); font-weight: 700; }
+  .maybe { color: var(--warn); font-weight: 700; }
+  footer { text-align: center; color: var(--muted); font-size: 0.85rem; padding: 32px 24px 64px; border-top: 1px solid var(--border); }
+  .pill { display: inline-block; font-size: 0.72rem; background: var(--panel-2); border: 1px solid var(--border); border-radius: 6px; padding: 2px 8px; color: var(--muted); }
+  ul.clean { list-style: none; padding-left: 0; }
+  ul.clean li { padding-left: 26px; position: relative; margin: 8px 0; }
+  ul.clean li::before { content: "→"; position: absolute; left: 0; color: var(--accent); }
+  .step { counter-increment: step; position: relative; padding-left: 46px; margin: 22px 0; }
+  .steps { counter-reset: step; }
+  .step::before { content: counter(step); position: absolute; left: 0; top: -2px; width: 30px; height: 30px; background: var(--panel-2); border: 1px solid var(--border); border-radius: 50%; display: grid; place-items: center; font-weight: 700; color: var(--accent); }
+  .step h3 { margin-top: 0; }
+  hr { border: none; border-top: 1px solid var(--border); margin: 32px 0; }
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <h1>Fine-Tuning a Language Model</h1>
+  <p>A plain-English guide to what fine-tuning is, when you can (and can't) do it, why data is the hard part — plus a complete worked example that extracts phone numbers from messy customer-service notes.</p>
+  <div class="badges">
+    <span class="badge">Encoder · Decoder · Seq2Seq</span>
+    <span class="badge">Open vs. closed weights</span>
+    <span class="badge">Hugging Face</span>
+    <span class="badge">Full worked example</span>
+  </div>
+</header>
+
+<main>
+
+<nav class="toc">
+  <strong>Contents</strong>
+  <ol>
+    <li><a href="#what">What fine-tuning is</a></li>
+    <li><a href="#spectrum">Prompt → RAG → fine-tune</a></li>
+    <li><a href="#why-some">Why some models can be tuned</a></li>
+    <li><a href="#closed">Closed frontier models</a></li>
+    <li><a href="#architectures">Encoder / decoder / seq2seq</a></li>
+    <li><a href="#how-tune">What actually changes</a></li>
+    <li><a href="#hf">Navigating Hugging Face</a></li>
+    <li><a href="#data">Data: the hard part</a></li>
+    <li><a href="#scenario">Our scenario</a></li>
+    <li><a href="#example">The worked example</a></li>
+    <li><a href="#checklist">Checklist & pitfalls</a></li>
+  </ol>
+</nav>
+
+<!-- ============================================================ -->
+<h2 id="what">1. What fine-tuning actually is</h2>
+
+<p>A modern language model is just a very large pile of <em>numbers</em> — its <strong>weights</strong> (also called parameters). Those numbers were set during <strong>pre-training</strong>, where the model read a huge amount of generic text and learned the statistical shape of language: grammar, facts, reasoning patterns, common formats.</p>
+
+<p><strong>Fine-tuning</strong> means taking that already-trained model and continuing to train it a little more on <em>your</em> data, for <em>your</em> task. You are not building a model from scratch — you are nudging an existing one. Concretely, you show it examples (input → desired output), measure how wrong it is (the <em>loss</em>), and use <em>gradient descent</em> to adjust the weights so it is a little less wrong next time. Repeat over your dataset a few times (a few <em>epochs</em>) and the model specializes.</p>
+
+<div class="callout tip">
+  <span class="label">The one-sentence version</span>
+  Pre-training teaches a model <em>language in general</em>; fine-tuning teaches it <em>your task in particular</em> by adjusting weights that already exist.
+</div>
+
+<p>Because you start from a capable model, fine-tuning needs far less data and compute than pre-training — thousands of examples instead of billions, and a laptop or a single GPU instead of a data center.</p>
+
+<!-- ============================================================ -->
+<h2 id="spectrum">2. The spectrum: prompt → RAG → fine-tune</h2>
+
+<p>Fine-tuning is not always the right tool. There is a ladder of effort, and you should climb it only as far as you need to:</p>
+
+<table>
+  <tr><th>Technique</th><th>What it does</th><th>Changes weights?</th><th>Reach for it when…</th></tr>
+  <tr><td><strong>Prompting</strong></td><td>You write better instructions / examples in the request itself (few-shot).</td><td class="no">No</td><td>The base model already <em>can</em> do the task; you just need to ask well.</td></tr>
+  <tr><td><strong>RAG</strong> <span class="pill">retrieval</span></td><td>You fetch relevant documents and paste them into the prompt at query time.</td><td class="no">No</td><td>The task needs <em>knowledge</em> the model lacks (your docs, fresh facts).</td></tr>
+  <tr><td><strong>Fine-tuning</strong></td><td>You permanently adjust the weights on labeled examples.</td><td class="yes">Yes</td><td>You need a consistent <em>behavior / format / skill</em>, lower latency, or a small specialized model.</td></tr>
+</table>
+
+<div class="callout warn">
+  <span class="label">Rule of thumb</span>
+  Fine-tune for <strong>behavior and form</strong> ("always output JSON like this", "tag phone numbers"); use RAG for <strong>knowledge and facts</strong> ("answer from these 10,000 documents"). Fine-tuning is a poor way to inject facts and a great way to lock in a skill or output shape.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="why-some">3. Why <em>some</em> models can be fine-tuned and others can't</h2>
+
+<p>When Hugging Face says a model is "fine-tunable," it really comes down to three things being true at once:</p>
+
+<ul class="clean">
+  <li><strong>The weights are published.</strong> You can download the actual parameter file (often <code>.safetensors</code>). To change weights, you must <em>have</em> the weights. This is what "open-weight" means.</li>
+  <li><strong>The license permits it.</strong> Open weights still come with a license (Apache-2.0, MIT, Llama Community License, etc.). Most permit fine-tuning; a few restrict commercial use. Always read it.</li>
+  <li><strong>The architecture is trainable on your hardware.</strong> A 7-billion-parameter model is "fine-tunable" in principle, but full fine-tuning may need more GPU memory than you have. (Techniques like LoRA — see §6 — fix this.)</li>
+</ul>
+
+<p>So when you see <em>"fine-tunable"</em> on a model card, read it as: <strong>"the weights are downloadable and the license lets you keep training them."</strong> It does <em>not</em> mean someone has set up a special service for you — it means the door is open because the model is open.</p>
+
+<!-- ============================================================ -->
+<h2 id="closed">4. Closed frontier models (ChatGPT, Claude, Gemini)</h2>
+
+<div class="callout stop">
+  <span class="label">The core constraint</span>
+  You cannot fine-tune a closed model in the classic sense because <strong>you do not have its weights</strong>. The weights of GPT-4-class and Claude-class models live only on the provider's servers. No weights → nothing to adjust → no fine-tuning.
+</div>
+
+<p>There are two important nuances, though:</p>
+
+<ul class="clean">
+  <li><strong>Hosted fine-tuning APIs.</strong> Some closed providers (e.g. OpenAI for certain models) let you <em>upload examples</em> and they fine-tune a private copy <em>on their infrastructure</em>. You still never see the weights — you send data in, you get an API endpoint out. It's real fine-tuning, just rented.</li>
+  <li><strong>Building <em>on top</em> of the model.</strong> Even with a fully closed model you can still specialize behavior without touching weights: rich system prompts, few-shot examples, RAG, tool use, and output validators. You're wrapping the model, not retraining it.</li>
+</ul>
+
+<p>By contrast, <strong>open-weight</strong> models (Llama, Mistral, Gemma, Qwen, BERT, T5, DistilBERT, and thousands more on Hugging Face) hand you the parameter file. You can fine-tune them on your own machine, inspect them, and ship the result yourself. That freedom is exactly why this guide's example uses an open model.</p>
+
+<!-- ============================================================ -->
+<h2 id="architectures">5. Three model shapes — and what each is good at</h2>
+
+<p>"Language model" covers three architectures. Knowing which is which tells you what task to fine-tune for. They are all built from the same Transformer blocks; the difference is which blocks they keep.</p>
+
+<table>
+  <tr><th>Shape</th><th>Examples</th><th>Naturally good at</th><th>Our task?</th></tr>
+  <tr>
+    <td><strong>Encoder-only</strong><br><span class="pill">understands text</span></td>
+    <td>BERT, DistilBERT, RoBERTa, DeBERTa</td>
+    <td>Reading & labeling: classification, sentiment, <strong>named-entity recognition (NER)</strong>, extracting spans. Sees the <em>whole</em> sentence at once (bidirectional).</td>
+    <td class="yes">✓ Best fit</td>
+  </tr>
+  <tr>
+    <td><strong>Encoder–decoder (seq2seq)</strong><br><span class="pill">transforms text</span></td>
+    <td>T5, BART, FLAN-T5</td>
+    <td>Turning one text into another: translation, summarization, "rewrite as…". Reads an input, writes an output.</td>
+    <td class="maybe">~ Works, heavier</td>
+  </tr>
+  <tr>
+    <td><strong>Decoder-only</strong><br><span class="pill">generates text</span></td>
+    <td>GPT, Llama, Mistral, Gemma, Qwen</td>
+    <td>Open-ended generation, chat, reasoning, code. Predicts the next token, left to right.</td>
+    <td class="maybe">~ Overkill here</td>
+  </tr>
+</table>
+
+<p>Our job — "find the phone numbers in this note" — is fundamentally a <strong>labeling</strong> problem: for each word, is it part of a phone number or not? That is exactly what encoder-only models with a <em>token-classification head</em> do best, with the least data and compute. So we'll fine-tune <strong>DistilBERT</strong>, a small, fast, distilled version of BERT.</p>
+
+<div class="callout tip">
+  <span class="label">Why not just use ChatGPT / a big LLM?</span>
+  You could prompt a large decoder model to extract phone numbers, and it would mostly work. But a fine-tuned DistilBERT is ~100&nbsp;MB, runs on a CPU in milliseconds, costs nothing per call, needs no internet, and is more consistent on <em>your</em> formats. For a narrow, high-volume task, small-and-fine-tuned beats big-and-general.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="how-tune">6. What actually changes when you fine-tune</h2>
+
+<p>You asked the right questions: do we adjust existing layers, or add new ones? Both happen, and it's worth seeing them clearly.</p>
+
+<h3>Adding a "head"</h3>
+<p>A pre-trained encoder like DistilBERT outputs a rich numeric vector for every token. To do NER you bolt a small new layer on top — the <strong>head</strong> — that maps each token's vector to your label set (here: <code>O</code>, <code>B-PHONE</code>, <code>I-PHONE</code>). That head starts out random. So fine-tuning here does <em>both</em>: it <strong>adds</strong> a new output layer <em>and</em> <strong>adjusts</strong> the existing body so its representations suit your task. Hugging Face does this for you with one line: <code>AutoModelForTokenClassification.from_pretrained(...)</code>.</p>
+
+<h3>Full fine-tuning vs. parameter-efficient (LoRA / PEFT)</h3>
+<table>
+  <tr><th>Approach</th><th>What it updates</th><th>Cost</th><th>When</th></tr>
+  <tr><td><strong>Full fine-tuning</strong></td><td>Every weight in the model.</td><td>Highest memory; best for small models like DistilBERT.</td><td>Small models, or you have the GPU.</td></tr>
+  <tr><td><strong>LoRA / PEFT</strong></td><td>A tiny set of <em>added</em> adapter weights; the original model is frozen.</td><td>Tiny — fine-tune a 7B model on one consumer GPU.</td><td>Large decoder models; limited hardware.</td></tr>
+</table>
+<p>Our example uses <strong>full</strong> fine-tuning because DistilBERT is small enough that it's simplest and works great on a laptop. For large LLMs you'd typically reach for LoRA — same idea, you just freeze the body and train small adapters bolted alongside it.</p>
+
+<!-- ============================================================ -->
+<h2 id="hf">7. Tangible steps: finding a fine-tunable model on Hugging Face</h2>
+
+<div class="steps">
+  <div class="step">
+    <h3>Go to the Models hub</h3>
+    <p>Open <a href="https://huggingface.co/models" target="_blank" rel="noopener">huggingface.co/models</a>. The left sidebar is your filter panel.</p>
+  </div>
+  <div class="step">
+    <h3>Filter by task</h3>
+    <p>Under <em>Tasks</em>, pick the shape of your problem. For us that's <strong>Token Classification</strong> (NER lives here). For "rewrite/summarize" you'd pick <em>Summarization</em>; for chat, <em>Text Generation</em>.</p>
+  </div>
+  <div class="step">
+    <h3>Read the model card</h3>
+    <p>Click a model (e.g. <code>distilbert-base-uncased</code>). The card tells you the architecture, the <strong>license</strong>, intended use, and often example code. A downloadable <em>"Files and versions"</em> tab with a <code>.safetensors</code> / <code>.bin</code> file = open weights = fine-tunable.</p>
+  </div>
+  <div class="step">
+    <h3>Confirm it's a base, not a closed API</h3>
+    <p>If you can download the weights and the license permits training, you can fine-tune it locally. If a "model" is only reachable through a paid endpoint with no weights file, it's closed — see §4.</p>
+  </div>
+  <div class="step">
+    <h3>See what others fine-tuned it into</h3>
+    <p>On a base model's page, the <em>"Adapters / Finetunes"</em> links and a hub search like <code>dslim/bert-base-NER</code> show real fine-tuned descendants — proof the base is trainable and a starting point you can often reuse.</p>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="data">8. Data — the genuinely hard part</h2>
+
+<div class="callout warn">
+  <span class="label">The truth nobody tells beginners</span>
+  Writing the training code is the easy 10%. Getting <strong>good, correctly-labeled data</strong> is the other 90% — and it is what determines whether your model works. The model can only learn the patterns your labels actually contain.
+</div>
+
+<h3>How much do you need?</h3>
+<p>For a narrow extraction task like ours, a few hundred to a couple thousand labeled examples can already work well, because we start from a pre-trained model. The number grows with task difficulty and the variety of inputs you must handle.</p>
+
+<h3>What "good data" means</h3>
+<ul class="clean">
+  <li><strong>Representative:</strong> it must contain every messy variation you'll see in production — <code>(123) 456-7890</code>, <code>123-456-7890</code>, <code>1234567890</code>, <code>123.456.7890</code>, spaces, a leading <code>+1</code>, even 7-digit local numbers.</li>
+  <li><strong>Includes hard negatives:</strong> the things that look like phone numbers but aren't — account numbers, order IDs, dates, dollar amounts, ZIP codes. Without these, the model learns "long run of digits = phone" and fails exactly where a regex already fails.</li>
+  <li><strong>Consistently labeled:</strong> every annotator must mark spans the same way. Ambiguity in labels becomes confusion in the model.</li>
+  <li><strong>Cleanly split:</strong> divide into <em>train</em> / <em>validation</em> / <em>test</em> with <strong>no overlap</strong>. You tune on validation and report honesty on test. Leakage between splits gives you fake-good numbers.</li>
+</ul>
+
+<h3>Where data comes from</h3>
+<ul class="clean">
+  <li><strong>Your own historical records</strong> — here, real (anonymized!) agent notes. The gold standard, because it matches production exactly.</li>
+  <li><strong>Human labeling</strong> — annotators mark the spans, often in a tool like Label Studio or Doccano, producing character offsets per entity.</li>
+  <li><strong>Programmatic / synthetic generation</strong> — when real labeled data is scarce, generate it: drop known phone numbers (and known distractors) into realistic templates, and you get <em>perfect</em> labels for free. This is exactly what our example does to get you running today, and it's a legitimate way to bootstrap before you mix in real data.</li>
+</ul>
+
+<div class="callout tip">
+  <span class="label">The label format we use (BIO tagging)</span>
+  NER labels each token: <code>B-PHONE</code> = first token of a phone number, <code>I-PHONE</code> = a continuing token of one, <code>O</code> = everything else ("Outside"). So <code>"call me at (123) 456-7890 thanks"</code> tags <code>(123)</code>→B-PHONE, <code>456-7890</code>→I-PHONE, and every other word →O. This is the standard, model-friendly way to mark spans.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="scenario">9. Our scenario</h2>
+
+<p>We have a pile of free-text notes written by customer-service agents. They contain phone numbers in wildly inconsistent formats, mixed in with account numbers, order IDs, dates, and dollar amounts. We want a model that cleanly pulls out <strong>only the phone numbers</strong>.</p>
+
+<p>Yes — a regex can catch many phone formats. But a regex also happily grabs a 10-digit account number, and tuning a regex to know "this digit-run is an account, that one is a phone" from surrounding words gets ugly fast. A fine-tuned model learns from <em>context</em> ("call back at…", "acct #…") which digit-runs are phones — the thing regex can't do.</p>
+
+<div class="callout tip">
+  <span class="label">A practical hybrid</span>
+  In production, many teams combine both: the model finds candidate spans using context, then a regex/normalizer cleans the digits into a canonical <code>+1XXXXXXXXXX</code>. Use each tool for what it's good at.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="example">10. The worked example (run it yourself)</h2>
+
+<p>The companion code in this repo fine-tunes <code>distilbert-base-uncased</code> into a phone-number extractor. Everything is managed with <a href="https://docs.astral.sh/uv/" target="_blank" rel="noopener">uv</a> — no manual virtualenvs, no <code>pip install</code> juggling.</p>
+
+<h3>The three steps</h3>
+<pre><code># 0. one-time: install uv (https://docs.astral.sh/uv/)
+#    macOS/Linux:  curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# 1. generate a labeled, synthetic dataset (train/val/test JSONL)
+uv run generate-data
+
+# 2. fine-tune DistilBERT into a token-classifier (writes ./phone-ner-model)
+uv run train
+
+# 3. try it on new notes
+uv run predict "Cust called from (415) 555-0132, acct 5567891234, owes $42.50"
+</code></pre>
+
+<p>You don't run <code>pip install</code> at all — <code>uv run</code> reads <code>pyproject.toml</code>, builds the environment on first call, and caches it. The first run downloads PyTorch + the base model (a few hundred MB); after that it's instant.</p>
+
+<h3>What each file does</h3>
+<table>
+  <tr><th>File</th><th>Role</th></tr>
+  <tr><td><code>src/phone_ft/generate_data.py</code></td><td>Builds realistic notes with phone numbers in every format <em>plus</em> hard-negative distractors, and emits perfectly-labeled BIO data. This is the "get the data" step, automated.</td></tr>
+  <tr><td><code>src/phone_ft/train.py</code></td><td>Loads the data, tokenizes it, aligns labels to sub-word tokens, and fine-tunes DistilBERT with the Hugging Face <code>Trainer</code>. Reports precision/recall/F1.</td></tr>
+  <tr><td><code>src/phone_ft/predict.py</code></td><td>Loads your fine-tuned model and extracts phone numbers from any new note you pass in.</td></tr>
+</table>
+
+<h3>The heart of it (token-classification fine-tune)</h3>
+<p>The conceptual core, in a few lines — the full, runnable version is in <code>train.py</code>:</p>
+<pre><code>from transformers import (AutoTokenizer, AutoModelForTokenClassification,
+                          Trainer, TrainingArguments, DataCollatorForTokenClassification)
+
+labels = ["O", "B-PHONE", "I-PHONE"]
+tok = AutoTokenizer.from_pretrained("distilbert-base-uncased")
+
+# Adds a fresh classification HEAD on top of the pretrained body:
+model = AutoModelForTokenClassification.from_pretrained(
+    "distilbert-base-uncased", num_labels=len(labels))
+
+# ... tokenize text, align each label to its sub-word tokens ...
+
+Trainer(
+    model=model,
+    args=TrainingArguments(output_dir="phone-ner-model", num_train_epochs=4),
+    train_dataset=train_ds, eval_dataset=val_ds,
+    data_collator=DataCollatorForTokenClassification(tok),
+).train()
+</code></pre>
+
+<p>That single <code>from_pretrained</code> call is §6 in action: it keeps DistilBERT's pretrained body and <em>adds</em> a new 3-way head, and <code>.train()</code> adjusts both on our data.</p>
+
+<!-- ============================================================ -->
+<h2 id="checklist">11. Quick checklist & common pitfalls</h2>
+
+<ul class="clean">
+  <li><strong>Can I even fine-tune this model?</strong> Are the weights downloadable and the license permissive? If not, it's closed — wrap it instead (§4).</li>
+  <li><strong>Right architecture for the task?</strong> Labeling → encoder; transform text → seq2seq; generate → decoder (§5).</li>
+  <li><strong>Do I really need fine-tuning?</strong> Try prompting / RAG first; fine-tune for behavior & form (§2).</li>
+  <li><strong>Is my data representative <em>and</em> full of hard negatives?</strong> This is where models live or die (§8).</li>
+  <li><strong>Clean train/val/test split, no leakage?</strong> Otherwise your metrics lie.</li>
+  <li><strong>Pitfall — too few epochs / too many:</strong> too few and it underfits; too many and it memorizes (overfits). Watch validation F1, not training loss.</li>
+  <li><strong>Pitfall — label misalignment:</strong> with sub-word tokenizers you must align each label to the right sub-token (the code shows how).</li>
+</ul>
+
+</main>
+
+<footer>
+  Built as a learning artifact · base model: <code>distilbert-base-uncased</code> · tooling: <code>uv</code> + Hugging Face Transformers<br>
+  Companion code lives alongside this page in the <code>ft</code> repo. Published with GitHub Pages.
+</footer>
+
+</body>
+</html>

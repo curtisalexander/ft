@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.uv/
+
+# uv
+# (uv.lock SHOULD be committed; do not ignore it)
+
+# Training artifacts
+phone-ner-model/
+runs/
+*.log
+checkpoint-*/
+
+# Data (generated locally; regenerate with `uv run generate-data`)
+data/*.jsonl
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
