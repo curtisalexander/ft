@@ -98,12 +98,12 @@
 
 <header class="hero">
   <h1>Fine-Tuning a Language Model</h1>
-  <p>A plain-English guide to what fine-tuning is, when you can (and can't) do it, why data is the hard part — plus a complete worked example that extracts phone numbers from messy customer-service notes.</p>
+  <p>A plain-English guide to what fine-tuning is, when you can (and can't) do it, why data is the hard part — plus two complete worked examples: extracting phone numbers from messy notes, and detecting whether a call transcript is a voicemail.</p>
   <div class="badges">
     <span class="badge">Encoder · Decoder · Seq2Seq</span>
     <span class="badge">Open vs. closed weights</span>
     <span class="badge">Hugging Face</span>
-    <span class="badge">Full worked example</span>
+    <span class="badge">Two worked examples</span>
   </div>
 </header>
 
@@ -120,8 +120,9 @@
     <li><a href="#how-tune">What actually changes</a></li>
     <li><a href="#hf">Navigating Hugging Face</a></li>
     <li><a href="#data">Data: the hard part</a></li>
-    <li><a href="#scenario">Our scenario</a></li>
-    <li><a href="#example">The worked example</a></li>
+    <li><a href="#scenario">Example A: phone numbers</a></li>
+    <li><a href="#example">The phone walkthrough</a></li>
+    <li><a href="#voicemail">Example B: voicemail detection</a></li>
     <li><a href="#checklist">Checklist & pitfalls</a></li>
   </ol>
 </nav>
@@ -295,9 +296,9 @@
 </div>
 
 <!-- ============================================================ -->
-<h2 id="scenario">9. Our scenario</h2>
+<h2 id="scenario">9. Example A — extracting phone numbers (token classification)</h2>
 
-<p>We have a pile of free-text notes written by customer-service agents. They contain phone numbers in wildly inconsistent formats, mixed in with account numbers, order IDs, dates, and dollar amounts. We want a model that cleanly pulls out <strong>only the phone numbers</strong>.</p>
+<p>We have a pile of free-text notes written by customer-service agents. They contain phone numbers in wildly inconsistent formats, mixed in with account numbers, order IDs, dates, and dollar amounts. We want a model that cleanly pulls out <strong>only the phone numbers</strong>. Because we label <em>each token</em> ("is this word part of a phone number?"), this is a <strong>token-classification</strong> task — the best fit for an encoder model.</p>
 
 <p>Yes — a regex can catch many phone formats. But a regex also happily grabs a 10-digit account number, and tuning a regex to know "this digit-run is an account, that one is a phone" from surrounding words gets ugly fast. A fine-tuned model learns from <em>context</em> ("call back at…", "acct #…") which digit-runs are phones — the thing regex can't do.</p>
 
@@ -307,7 +308,7 @@
 </div>
 
 <!-- ============================================================ -->
-<h2 id="example">10. The worked example (run it yourself)</h2>
+<h2 id="example">10. The phone walkthrough (run it yourself)</h2>
 
 <p>The companion code in this repo fine-tunes <code>distilbert-base-uncased</code> into a phone-number extractor. Everything is managed with <a href="https://docs.astral.sh/uv/" target="_blank" rel="noopener">uv</a> — no manual virtualenvs, no <code>pip install</code> juggling.</p>
 
@@ -316,13 +317,13 @@
 #    macOS/Linux:  curl -LsSf https://astral.sh/uv/install.sh | sh
 
 # 1. generate a labeled, synthetic dataset (train/val/test JSONL)
-uv run generate-data
+uv run phone-generate-data
 
-# 2. fine-tune DistilBERT into a token-classifier (writes ./phone-ner-model)
-uv run train
+# 2. fine-tune DistilBERT into a token-classifier (writes ./models/phone-ner)
+uv run phone-train
 
 # 3. try it on new notes
-uv run predict "Cust called from (415) 555-0132, acct 5567891234, owes $42.50"
+uv run phone-predict "Cust called from (415) 555-0132, acct 5567891234, owes $42.50"
 </code></pre>
 
 <p>You don't run <code>pip install</code> at all — <code>uv run</code> reads <code>pyproject.toml</code>, builds the environment on first call, and caches it. The first run downloads PyTorch + the base model (a few hundred MB); after that it's instant.</p>
@@ -351,7 +352,7 @@ model = AutoModelForTokenClassification.from_pretrained(
 
 Trainer(
     model=model,
-    args=TrainingArguments(output_dir="phone-ner-model", num_train_epochs=4),
+    args=TrainingArguments(output_dir="models/phone-ner", num_train_epochs=4),
     train_dataset=train_ds, eval_dataset=val_ds,
     data_collator=DataCollatorForTokenClassification(tok),
 ).train()
@@ -360,23 +361,85 @@ Trainer(
 <p>That single <code>from_pretrained</code> call is §6 in action: it keeps DistilBERT's pretrained body and <em>adds</em> a new 3-way head, and <code>.train()</code> adjusts both on our data.</p>
 
 <!-- ============================================================ -->
-<h2 id="checklist">11. Quick checklist & common pitfalls</h2>
+<h2 id="voicemail">11. Example B — detecting voicemails (sequence classification)</h2>
+
+<p>The second use case answers a different question: <em>given a call transcript, is it a voicemail or a live conversation?</em> This is a <strong>sequence-classification</strong> task — one label for the <em>whole</em> document, not a label per token. It's the simplest, most classic fine-tune there is, and the same DistilBERT base and <code>uv</code> tooling carry straight over.</p>
+
+<h3>How it differs from Example A</h3>
+<table>
+  <tr><th></th><th>Example A — phone numbers</th><th>Example B — voicemail</th></tr>
+  <tr><td>Task shape</td><td>Token classification</td><td><strong>Sequence classification</strong></td></tr>
+  <tr><td>Label</td><td>A tag per token (BIO)</td><td><strong>One label per transcript</strong> (<code>voicemail</code> / <code>not_voicemail</code>)</td></tr>
+  <tr><td>HF model class</td><td><code>AutoModelForTokenClassification</code></td><td><code>AutoModelForSequenceClassification</code></td></tr>
+  <tr><td>Head added</td><td>Token-level (3-way)</td><td>Document-level (2-way)</td></tr>
+  <tr><td>Labeling effort</td><td>Mark every span (tedious)</td><td><strong>One click per example</strong> (cheap)</td></tr>
+</table>
+
+<h3>Why fine-tune (and the data you need)</h3>
+<p>The goal is to classify at <strong>high volume, cheaply and fast</strong> — exactly where a small fine-tuned encoder beats prompting a big LLM per call. Voicemails carry strong learnable signals: system phrasing ("you've reached…", "leave a message after the tone"), a one-sided flow, a beep, and brevity. As always, the data is the real work:</p>
+<ul class="clean">
+  <li><strong>Format:</strong> each example is one transcript plus a single label — <code>{"text": "Hi, you've reached Jamie…", "label": "voicemail"}</code>.</li>
+  <li><strong>Class balance:</strong> voicemails are usually rarer than live calls. If they're only a few percent of traffic, random sampling gives you too few positives — oversample, or weight the loss.</li>
+  <li><strong>Hard negatives (the crucial part):</strong> things that are automated or <em>sound</em> voicemail-ish but aren't — IVR phone menus ("press 1 for billing"), hold/queue messages ("please remain on the line"), and live calls that <em>open</em> with a voicemail greeting before a human picks up. Without these the model learns a lazy "automated = voicemail" rule and fails exactly there.</li>
+  <li><strong>Length:</strong> encoder models cap at ~512 tokens, but the voicemail "tell" is almost always at the very start, so truncating long transcripts to the first chunk keeps the signal.</li>
+</ul>
+
+<h3>Run it yourself</h3>
+<pre><code># 1. generate labeled, synthetic transcripts (voicemails + hard negatives)
+uv run vm-generate-data
+
+# 2. fine-tune DistilBERT into a 2-way classifier (writes ./models/voicemail-clf)
+uv run vm-train
+
+# 3. classify a transcript
+uv run vm-predict "Hi, you've reached Jamie. Leave your name and number after the tone."
+</code></pre>
+
+<h3>The heart of it (sequence-classification fine-tune)</h3>
+<pre><code>from transformers import (AutoTokenizer, AutoModelForSequenceClassification,
+                          Trainer, TrainingArguments, DataCollatorWithPadding)
+
+labels = ["not_voicemail", "voicemail"]
+tok = AutoTokenizer.from_pretrained("distilbert-base-uncased")
+
+# A 2-way classification head on the pretrained body — one label per document:
+model = AutoModelForSequenceClassification.from_pretrained(
+    "distilbert-base-uncased", num_labels=len(labels))
+
+# enc = tok(text, truncation=True, max_length=512); enc["labels"] = label_id
+
+Trainer(
+    model=model,
+    args=TrainingArguments(output_dir="models/voicemail-clf", num_train_epochs=3),
+    train_dataset=train_ds, eval_dataset=val_ds,
+    data_collator=DataCollatorWithPadding(tok),
+).train()
+</code></pre>
+
+<div class="callout tip">
+  <span class="label">Same idea, simpler head</span>
+  Notice how little changes from Example A: swap <code>…ForTokenClassification</code> for <code>…ForSequenceClassification</code>, give one label per example instead of per token, and use a padding collator. That's the point — once you understand the pattern, new tasks are mostly new <em>data</em>, not new code. And because the classes are imbalanced, watch <strong>precision/recall and the confusion matrix</strong>, not just accuracy.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="checklist">12. Quick checklist & common pitfalls</h2>
 
 <ul class="clean">
   <li><strong>Can I even fine-tune this model?</strong> Are the weights downloadable and the license permissive? If not, it's closed — wrap it instead (§4).</li>
-  <li><strong>Right architecture for the task?</strong> Labeling → encoder; transform text → seq2seq; generate → decoder (§5).</li>
-  <li><strong>Do I really need fine-tuning?</strong> Try prompting / RAG first; fine-tune for behavior & form (§2).</li>
+  <li><strong>Right architecture <em>and task shape</em>?</strong> Per-token labeling → token classification; one label per document → sequence classification; transform text → seq2seq; generate → decoder (§5, §9, §11).</li>
+  <li><strong>Do I really need fine-tuning?</strong> Try prompting / RAG first; fine-tune for behavior & form, or for cheap high-volume inference (§2).</li>
   <li><strong>Is my data representative <em>and</em> full of hard negatives?</strong> This is where models live or die (§8).</li>
+  <li><strong>Are my classes balanced?</strong> For classification, watch precision/recall and the confusion matrix — accuracy alone hides a model that just predicts the majority class.</li>
   <li><strong>Clean train/val/test split, no leakage?</strong> Otherwise your metrics lie.</li>
   <li><strong>Pitfall — too few epochs / too many:</strong> too few and it underfits; too many and it memorizes (overfits). Watch validation F1, not training loss.</li>
-  <li><strong>Pitfall — label misalignment:</strong> with sub-word tokenizers you must align each label to the right sub-token (the code shows how).</li>
+  <li><strong>Pitfall — label misalignment:</strong> with sub-word tokenizers you must align each token-classification label to the right sub-token (the code shows how).</li>
 </ul>
 
 </main>
 
 <footer>
   Built as a learning artifact · base model: <code>distilbert-base-uncased</code> · tooling: <code>uv</code> + Hugging Face Transformers<br>
-  Companion code lives alongside this page in the <code>ft</code> repo. Published with GitHub Pages.
+  Two worked examples — token classification (phone numbers) and sequence classification (voicemail) — live alongside this page in the <code>ft</code> repo.
 </footer>
 
 </body>

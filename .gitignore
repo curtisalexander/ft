@@ -8,14 +8,15 @@ __pycache__/
 # uv
 # (uv.lock SHOULD be committed; do not ignore it)
 
-# Training artifacts
+# Training artifacts (fine-tuned models are large; regenerate with the train commands)
+models/
 phone-ner-model/
 runs/
 *.log
 checkpoint-*/
 
-# Data (generated locally; regenerate with `uv run generate-data`)
-data/*.jsonl
+# Data (generated locally; regenerate with the generate-data commands)
+data/
 
 # OS / editor
 .DS_Store
