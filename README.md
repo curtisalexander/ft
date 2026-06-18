@@ -1,6 +1,6 @@
 # ft — Fine-Tuning, explained with a worked example
 
-📖 **Read the guide:** open [`index.html`](index.html) in a browser, or serve it locally (see [Viewing the guide](#viewing-the-guide)).
+📖 **Read the guide:** open [`docs/index.html`](docs/index.html) in a browser, or serve it locally (see [Viewing the guide](#viewing-the-guide)).
 
 A small, self-contained learning project about **fine-tuning a language model**.
 
@@ -49,14 +49,12 @@ environment on first use, and caches it.
 
 ## Viewing the guide
 
-`index.html` is fully self-contained (no external assets), so you can view it two ways:
+`docs/index.html` is fully self-contained (no external assets) — just **open the file
+in your browser** (double-click it, or open `file://` to it). No server needed.
 
-- **Open the file directly** — double-click `index.html`, or open `file://` to it in your browser.
-- **Serve it locally:**
-
-  ```bash
-  python3 -m http.server 8000      # then open http://localhost:8000/
-  ```
+The `docs/` layout with a `.nojekyll` file is also the standard structure for serving
+the guide from GitHub Pages later (Settings → Pages → Source: `docs/`), should you
+ever want to.
 
 ## Notes
 
